@@ -9,8 +9,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var tracker = DockTracker { [weak self] geometry in self?.place(for: geometry) }
     private var hasPlaced = false
 
-    private let gap: CGFloat = 12
-
     func applicationDidFinishLaunching(_ notification: Notification) {
         hostingView.contextMenu = makeMenu()
         panel.contentView = hostingView
@@ -21,27 +19,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Placement
 
     private func place(for dock: DockGeometry) {
-        let width = Settings.pillWidth
-        let height = min(80, max(54, dock.thickness - 14))
+        // As tall as the Dock, within limits that keep the text legible.
+        let height = min(128, max(60, dock.thickness))
         let inset = (dock.thickness - height) / 2
         let screen = dock.screenFrame
+        let scale = height / 84
+        let gap = StripLayout.spacing(forHeight: height)
 
-        var pill: CGRect
+        // The free space beside the Dock that the strip may fill, with `gap` on both ends.
+        var region: CGRect
         switch dock.edge {
+        case .bottom where dock.isMeasured:
+            let minX = dock.frame.maxX + gap
+            region = CGRect(x: minX, y: dock.frame.midY - height / 2, width: screen.maxX - gap - minX, height: height)
         case .bottom:
-            let x = dock.isMeasured ? dock.frame.maxX + gap : screen.maxX - width - 16
-            pill = CGRect(x: x, y: dock.frame.midY - height / 2, width: width, height: height)
+            // Without the Dock's width, take one card's worth at the right edge.
+            let width = StripLayout.heroPreferredWidth * scale
+            region = CGRect(x: screen.maxX - gap - width, y: dock.frame.midY - height / 2, width: width, height: height)
         case .left:
-            pill = CGRect(x: dock.frame.minX + inset, y: dock.frame.minY - gap - height, width: width, height: height)
+            let minX = dock.frame.minX + inset
+            region = CGRect(x: minX, y: dock.frame.minY - gap - height, width: screen.maxX - gap - minX, height: height)
         case .right:
-            pill = CGRect(x: dock.frame.maxX - inset - width, y: dock.frame.minY - gap - height, width: width, height: height)
+            let maxX = dock.frame.maxX - inset
+            region = CGRect(x: screen.minX + gap, y: dock.frame.minY - gap - height, width: maxX - screen.minX - gap, height: height)
         }
-        // Stay on the Dock's screen even when the Dock is very wide.
-        pill.origin.x = min(max(pill.minX, screen.minX + 8), screen.maxX - width - 8)
-        pill.origin.y = max(pill.minY, screen.minY + 4)
+        region.size.width = max(region.width, 300 * scale)
 
-        store.pillSize = pill.size
-        let frame = pill.insetBy(dx: -notchShadowPadding, dy: -notchShadowPadding)
+        // The layout may not use all of a very wide region; keep the strip against the Dock.
+        let layout = StripLayout(width: region.width, height: height)
+        var strip = region
+        strip.size.width = layout.totalWidth
+        if dock.edge == .right { strip.origin.x = region.maxX - strip.width }
+
+        // Stay on the Dock's screen even when the Dock leaves no room.
+        strip.origin.x = min(max(strip.minX, screen.minX + 8), screen.maxX - strip.width - 8)
+        strip.origin.y = max(strip.minY, screen.minY + 4)
+
+        let frame = strip.insetBy(dx: -notchShadowPadding, dy: -notchShadowPadding)
 
         if hasPlaced {
             NSAnimationContext.runAnimationGroup { context in

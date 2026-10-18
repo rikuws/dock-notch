@@ -105,7 +105,14 @@ final class DockTracker {
         // the Dock would appear instead of following it out of view.
         switch edge {
         case .bottom where frame.maxY <= screen.frame.minY + 1:
-            frame.origin.y = screen.frame.minY + 4
+            frame.origin.y = screen.frame.minY + 6
+        case .bottom:
+            // On macOS 26 the accessibility frame sits about 4.5pt above the glass you
+            // actually see. The area the screen reserves for the Dock ends at the glass's
+            // top edge, so align to that instead.
+            if #available(macOS 26, *), screen.visibleFrame.minY > screen.frame.minY {
+                frame.origin.y = screen.visibleFrame.minY - frame.height
+            }
         case .left where frame.maxX <= screen.frame.minX + 1:
             frame.origin.x = screen.frame.minX + 4
         case .right where frame.minX >= screen.frame.maxX - 1:
@@ -157,7 +164,9 @@ final class DockTracker {
             let right = full.maxX - visible.maxX
 
             if bottom > 0 {
-                let frame = CGRect(x: full.midX, y: full.minY, width: 0, height: bottom)
+                // On macOS 26 a 90pt reserved strip holds an 84pt Dock whose glass ends at
+                // the strip's top edge, about 6pt above the screen edge.
+                let frame = CGRect(x: full.midX, y: full.minY + 6, width: 0, height: max(bottom - 6, 1))
                 return DockGeometry(frame: frame, screenFrame: full, edge: .bottom, isMeasured: false)
             }
             if left > 0 {
@@ -172,7 +181,7 @@ final class DockTracker {
 
         // Auto-hidden Dock: sit at the bottom of the main screen.
         guard let screen = NSScreen.screens.first else { return nil }
-        let frame = CGRect(x: screen.frame.midX, y: screen.frame.minY + 4, width: 0, height: 84)
+        let frame = CGRect(x: screen.frame.midX, y: screen.frame.minY + 6, width: 0, height: 84)
         return DockGeometry(frame: frame, screenFrame: screen.frame, edge: .bottom, isMeasured: false)
     }
 

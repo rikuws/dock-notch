@@ -21,8 +21,9 @@ enum Settings {
         max(3, defaults.double(forKey: "rotationInterval").nonZero ?? 7)
     }
 
-    static var pillWidth: CGFloat {
-        CGFloat(min(640, max(300, defaults.double(forKey: "pillWidth").nonZero ?? 420)))
+    /// Most stat tiles to show beside the rotating card when there's room. 0 shows the card alone.
+    static var maxTiles: Int {
+        defaults.object(forKey: "maxTiles") as? Int ?? TileKind.allCases.count
     }
 
     /// Explicit path to the `gh` binary, for installs outside the usual locations.

@@ -12,28 +12,31 @@ enum Palette {
     static let hairline = Color.white.opacity(0.09)
 }
 
-/// Every size in the pill derives from its height, so the notch scales with the Dock.
-/// The design reference is a 70pt-tall pill.
+/// Every size in a box derives from its height, which matches the Dock's. The design
+/// reference is the default Dock: 84pt tall, with 64pt icons inset 10pt.
 struct NotchMetrics {
     let size: CGSize
 
-    var scale: CGFloat { size.height / 70 }
-    var radius: CGFloat { 20 * scale }
-    var leading: CGFloat { 18 * scale }
-    var tileInset: CGFloat { 8 * scale }
+    var scale: CGFloat { size.height / 84 }
+    var radius: CGFloat { 24 * scale }
+    var leading: CGFloat { 20 * scale }
+    /// The Dock's own inset, so avatars and symbols sit like Dock icons.
+    var tileInset: CGFloat { 10 * scale }
     var tile: CGFloat { size.height - tileInset * 2 }
-    /// Concentric with the pill's corners.
+    /// Concentric with the box's corners; about an app icon's radius at 64pt.
     var tileRadius: CGFloat { radius - tileInset }
     var chartWidth: CGFloat { size.width * 0.46 }
-    var headlineHeight: CGFloat { 31 * scale }
+    /// Caption, headline and footnote stack to about 64pt, leaving the Dock's 10pt above and below.
+    var headlineHeight: CGFloat { 33 * scale }
+    var statPadding: CGFloat { 13 * scale }
 
-    var caption: Font { .system(size: 11 * scale) }
-    var headline: Font { .system(size: 26 * scale, weight: .semibold).monospacedDigit() }
-    var quote: Font { .system(size: 16 * scale, weight: .semibold) }
-    var footnote: Font { .system(size: 11 * scale) }
-    var footnoteLead: Font { .system(size: 11 * scale, weight: .medium) }
-    var footnoteIcon: Font { .system(size: 10 * scale, weight: .semibold) }
-    var tileSymbol: Font { .system(size: 22 * scale, weight: .semibold) }
+    var caption: Font { .system(size: 13 * scale) }
+    var headline: Font { .system(size: 29 * scale, weight: .semibold).monospacedDigit() }
+    var quote: Font { .system(size: 18 * scale, weight: .semibold) }
+    var footnote: Font { .system(size: 13 * scale) }
+    var footnoteLead: Font { .system(size: 13 * scale, weight: .medium) }
+    var footnoteIcon: Font { .system(size: 12 * scale, weight: .semibold) }
+    var tileSymbol: Font { .system(size: 26 * scale, weight: .semibold) }
 
     func reservedTrailing(for accessory: CardModel.Accessory) -> CGFloat {
         switch accessory {
@@ -48,6 +51,6 @@ enum Motion {
     static let cardSwap = Animation.spring(duration: 0.5, bounce: 0.15)
     static let rowStagger: Double = 0.045
     static let counter = Animation.spring(duration: 0.6, bounce: 0.1)
-    static let hover = Animation.spring(duration: 0.35, bounce: 0.3)
+    static let layout = Animation.spring(duration: 0.45, bounce: 0.12)
     static let chartReveal = Animation.easeOut(duration: 1.1).delay(0.15)
 }

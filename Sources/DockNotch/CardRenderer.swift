@@ -1,11 +1,12 @@
 import AppKit
 import SwiftUI
 
-/// Development aid: `DockNotch --render <dir> [--sample]` writes every card to a PNG,
-/// using live data from gh, or made-up data that fills every card with `--sample`.
+/// Development aid: `DockNotch --render <dir> [--sample] [--width <points>]` writes the
+/// strip to a PNG once per rotating card, using live data from gh, or made-up data that
+/// fills every card with `--sample`. `--width` is the space beside the Dock to fill.
 @MainActor
 enum CardRenderer {
-    static func run(outputDirectory: String, sample: Bool) async {
+    static func run(outputDirectory: String, sample: Bool, width: CGFloat) async {
         let store = NotchStore()
         if sample {
             store.load(.sample)
@@ -22,14 +23,18 @@ enum CardRenderer {
         let directory = URL(fileURLWithPath: outputDirectory)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
+        let height: CGFloat = 84
+        let layout = StripLayout(width: width, height: height)
+        store.setVisibleTiles(layout.tiles)
+
         let kinds = store.cards.isEmpty ? [store.current] : store.cards
         for kind in kinds {
             store.select(kind)
             let canvas = NotchView(store: store)
                 .environment(\.notchIsStatic, true)
                 .frame(
-                    width: store.pillSize.width + notchShadowPadding * 2,
-                    height: store.pillSize.height + notchShadowPadding * 2
+                    width: layout.totalWidth + notchShadowPadding * 2,
+                    height: height + notchShadowPadding * 2
                 )
                 .background(LinearGradient(
                     colors: [Color(red: 0.35, green: 0.55, blue: 0.85), Color(red: 0.55, green: 0.35, blue: 0.75)],

@@ -1,21 +1,114 @@
 import SwiftUI
 
-/// Window padding around the pill, so its shadow and highlight glow aren't clipped.
+/// Window padding around the boxes, so their shadows and highlight glow aren't clipped.
 let notchShadowPadding: CGFloat = 20
 
+/// The rotating card followed by as many stat tiles as the window's width allows.
+/// Layout is derived from the live size, so the strip follows the Dock as it resizes.
 struct NotchView: View {
     let store: NotchStore
 
-    var body: some View {
-        let metrics = NotchMetrics(size: store.pillSize)
-        let shape = RoundedRectangle(cornerRadius: metrics.radius, style: .continuous)
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    var body: some View {
+        GeometryReader { geometry in
+            let size = CGSize(
+                width: max(0, geometry.size.width - notchShadowPadding * 2),
+                height: max(0, geometry.size.height - notchShadowPadding * 2)
+            )
+            let layout = StripLayout(width: size.width, height: size.height)
+
+            HStack(spacing: layout.spacing) {
+                HeroBox(store: store, size: CGSize(width: layout.heroWidth, height: size.height))
+                ForEach(layout.tiles, id: \.self) { tile in
+                    StatBox(tile: tile, store: store, size: CGSize(width: layout.tileWidth, height: size.height))
+                        .transition(reduceMotion
+                            ? .opacity
+                            : .scale(scale: 0.85, anchor: .leading).combined(with: .opacity))
+                }
+            }
+            .animation(Motion.layout, value: layout.tiles)
+            .frame(width: size.width, height: size.height, alignment: .leading)
+            .padding(notchShadowPadding)
+            .onChange(of: layout.tiles, initial: true) { _, tiles in
+                store.setVisibleTiles(tiles)
+            }
+        }
+    }
+}
+
+private struct HeroBox: View {
+    let store: NotchStore
+    let size: CGSize
+
+    var body: some View {
+        let metrics = NotchMetrics(size: size)
         CardView(card: .make(for: store), metrics: metrics, avatars: store.avatars)
-            .frame(width: metrics.size.width, height: metrics.size.height)
+            .modifier(BoxChrome(size: size, radius: metrics.radius, highlight: store.highlight))
+            .onTapGesture { store.openCurrent() }
+    }
+}
+
+private struct StatBox: View {
+    let tile: TileKind
+    let store: NotchStore
+    let size: CGSize
+
+    var body: some View {
+        let metrics = NotchMetrics(size: size)
+        let model = TileModel.make(tile, snapshot: store.snapshot)
+
+        VStack(alignment: .leading, spacing: 0) {
+            Text(model.caption)
+                .font(metrics.caption)
+                .foregroundStyle(Palette.secondary)
+            value(model.value, metrics: metrics)
+                .frame(height: metrics.headlineHeight, alignment: .leading)
+            Text(model.status)
+                .font(metrics.footnoteLead)
+                .foregroundStyle(model.tint)
+        }
+        .lineLimit(1)
+        .padding(.horizontal, metrics.statPadding)
+        .frame(width: size.width, height: size.height, alignment: .leading)
+        .modifier(BoxChrome(size: size, radius: metrics.radius, highlight: store.tileHighlights[tile] ?? 0))
+        .onTapGesture { store.open(tile) }
+    }
+
+    @ViewBuilder
+    private func value(_ value: TileModel.Value, metrics: NotchMetrics) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            switch value {
+            case .count(let count):
+                CountText(value: count)
+            case .ratio(let part, let whole):
+                CountText(value: part)
+                Text("/\(whole)").foregroundStyle(Palette.tertiary)
+            case .none:
+                Text("–").foregroundStyle(Palette.tertiary)
+            }
+        }
+        .font(metrics.headline)
+        .kerning(-0.4 * metrics.scale)
+        .foregroundStyle(Palette.primary)
+    }
+}
+
+/// The black, hairline-edged box every part of the strip sits in, with a green glow
+/// that plays each time `highlight` changes.
+private struct BoxChrome: ViewModifier {
+    let size: CGSize
+    let radius: CGFloat
+    let highlight: Int
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        content
+            .frame(width: size.width, height: size.height)
             .background(shape.fill(.black))
             .clipShape(shape)
             .overlay(shape.strokeBorder(Palette.hairline, lineWidth: 1))
-            .keyframeAnimator(initialValue: 0.0, trigger: store.highlight) { content, glow in
+            .keyframeAnimator(initialValue: 0.0, trigger: highlight) { content, glow in
                 content
                     .overlay(shape.strokeBorder(Palette.green.opacity(0.85 * glow), lineWidth: 1.5))
                     .shadow(color: Palette.green.opacity(0.5 * glow), radius: 12 * glow)
@@ -27,11 +120,17 @@ struct NotchView: View {
             // Layered shadow: a tight contact shadow under a soft ambient one.
             .shadow(color: .black.opacity(0.35), radius: 1, y: 1)
             .shadow(color: .black.opacity(0.28), radius: 12, y: 5)
-            .scaleEffect(store.isHovering ? 1.015 : 1)
-            .animation(Motion.hover, value: store.isHovering)
             .contentShape(shape)
-            .onTapGesture { store.openCurrent() }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct CountText: View {
+    let value: Int
+
+    var body: some View {
+        Text(value, format: .number)
+            .contentTransition(.numericText(value: Double(value)))
+            .animation(Motion.counter, value: value)
     }
 }
 
@@ -74,9 +173,7 @@ private struct CardView: View {
         switch card.headline {
         case .count(let value, let suffix):
             HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text(value, format: .number)
-                    .contentTransition(.numericText(value: Double(value)))
-                    .animation(Motion.counter, value: value)
+                CountText(value: value)
                 if !suffix.isEmpty {
                     Text(suffix).foregroundStyle(Palette.tertiary)
                 }

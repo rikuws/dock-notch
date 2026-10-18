@@ -21,7 +21,10 @@ final class NotchStore {
     /// Bumped whenever the notch jumps to a card because its data changed.
     private(set) var highlight = 0
     private(set) var isHovering = false
-    var pillSize = CGSize(width: 420, height: 70)
+    /// Stat tiles currently on screen, decided by the space beside the Dock.
+    private(set) var visibleTiles: [TileKind] = []
+    /// Bumped per tile when that tile's number changes meaningfully.
+    private(set) var tileHighlights: [TileKind: Int] = [:]
 
     let avatars = AvatarCache()
 
@@ -29,11 +32,14 @@ final class NotchStore {
     @ObservationIgnored private var client: GitHubClient?
     @ObservationIgnored private var loops: [Task<Void, Never>] = []
 
-    /// Cards that have something worth showing, in rotation order.
+    /// Cards that have something worth showing and aren't already covered by a
+    /// visible tile, in rotation order.
     var cards: [CardKind] {
         guard let snapshot else { return [] }
+        let covered = Set(visibleTiles.compactMap(\.replacesCard))
         return CardKind.allCases.filter { kind in
-            switch kind {
+            guard !covered.contains(kind) else { return false }
+            return switch kind {
             case .contributions, .openPRs: true
             case .comment: snapshot.latestComment != nil
             case .reviews: snapshot.reviewQueue.count > 0
@@ -69,7 +75,7 @@ final class NotchStore {
 
             if let previous {
                 if let changed = Self.notableChange(from: previous, to: fresh) {
-                    show(changed, highlight: true)
+                    announce(changed)
                 } else if !cards.contains(current) {
                     step(1)
                 }
@@ -102,6 +108,12 @@ final class NotchStore {
         show(kind, highlight: false)
     }
 
+    func setVisibleTiles(_ tiles: [TileKind]) {
+        guard tiles != visibleTiles else { return }
+        visibleTiles = tiles
+        if snapshot != nil, !cards.contains(current) { step(1) }
+    }
+
     /// Shows a fixed snapshot instead of fetching one (used for rendering previews).
     func load(_ snapshot: Snapshot) {
         self.snapshot = snapshot
@@ -109,21 +121,38 @@ final class NotchStore {
     }
 
     func openCurrent() {
-        guard let url = currentURL else { return }
+        open(current)
+    }
+
+    func open(_ tile: TileKind) {
+        open(tile.replacesCard ?? .contributions)
+    }
+
+    private func open(_ kind: CardKind) {
+        guard let url = url(for: kind) else { return }
         NSWorkspace.shared.open(url)
     }
 
-    private var currentURL: URL? {
+    private func url(for kind: CardKind) -> URL? {
         guard let snapshot else {
             return URL(string: "https://cli.github.com")
         }
-        switch current {
+        switch kind {
         case .contributions: return URL(string: "https://github.com/\(snapshot.login)")
         case .openPRs: return URL(string: "https://github.com/pulls")
         case .reviews: return URL(string: "https://github.com/pulls/review-requested")
         case .comment: return snapshot.latestComment?.url
         case .checks: return snapshot.checks?.firstFailing?.url ?? URL(string: "https://github.com/pulls")
         case .merged: return snapshot.merged.latest?.url
+        }
+    }
+
+    /// Draws attention to changed data: the tile that shows it glows, or the card jumps to it.
+    private func announce(_ kind: CardKind) {
+        if let tile = visibleTiles.first(where: { $0.replacesCard == kind }) {
+            tileHighlights[tile, default: 0] += 1
+        } else {
+            show(kind, highlight: true)
         }
     }
 
