@@ -1,0 +1,21 @@
+name: Build
+
+# Builds every push and pull request and renders each card with made-up data, so a
+# change, including one to a customized fork, can be looked at before it's merged.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - run: scripts/bundle.sh release
+      - run: build/DockNotch.app/Contents/MacOS/DockNotch --render "$RUNNER_TEMP/cards" --sample --width 960 --details
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cards
+          path: ${{ runner.temp }}/cards

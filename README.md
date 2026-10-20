@@ -9,16 +9,37 @@ are no tokens to set up.
 ![The strip with two tiles](docs/strip.png)
 ![A wider strip with four tiles](docs/strip-wide.png)
 
-## Requirements
+## Install
 
-- macOS 14 or later, Swift 6 toolchain (Xcode 16+)
-- `gh`, signed in: `brew install gh && gh auth login`
+[Download DockNotch.dmg](https://github.com/rikuws/dock-notch/releases/latest/download/DockNotch.dmg),
+open it and drag Dock Notch to Applications. It's signed and notarized, and keeps itself up
+to date.
 
-## Run it
+It needs macOS 14 or later and the GitHub CLI, signed in:
+`brew install gh && gh auth login`.
+
+## Make it your own
+
+Change anything you like with your coding agent, and keep getting updates:
+
+```bash
+git clone https://github.com/rikuws/dock-notch.git && cd dock-notch
+make customize IDEA="add a tile counting open issues assigned to me"
+```
+
+Your changes stay commits on top of the release, and each new release they move onto it,
+with your agent carrying over any that clash. Or skip the source entirely and have your
+agent build its own from [PROMPT.md](PROMPT.md). [CUSTOMIZING.md](CUSTOMIZING.md) covers
+both.
+
+## Build from source
+
+You need Xcode 16 or later, which brings the Swift 6 toolchain, and `gh` as above.
 
 ```bash
 make run        # build build/DockNotch.app and open it
 make install    # copy it to /Applications and open it
+make update     # move onto the newest release, keeping your changes, and reinstall
 ```
 
 On first launch macOS asks for **Accessibility** access. Dock Notch uses it only to read the
@@ -66,7 +87,18 @@ so the Accessibility grant survives rebuilds. Override it with `SIGN_IDENTITY="â
 - Click a card or tile to open it on GitHub (the comment, the failing PR, your PR list, and so on).
 - When something changes (a new comment, a new review request, a failing check, a merge), the
   tile showing it glows briefly, or the card jumps to it and glows.
-- Right-click for Refresh, Open at Login and Quit.
+- Right-click for Refresh, Open at Login, Check for Updates and Quit. The menu also shows
+  which version you're running.
+
+## Updates
+
+- **Downloaded copies** check for a new release once a day with
+  [Sparkle](https://sparkle-project.org) and ask before installing it. Each update is
+  signed, and Dock Notch checks that signature before installing. To stop the daily
+  check: `defaults write com.rikuws.docknotch SUEnableAutomaticChecks -bool NO`.
+- **Builds from source** check the same releases every six hours and offer to run
+  `make update`, which rebuilds from the new release with your changes on top (see
+  [CUSTOMIZING.md](CUSTOMIZING.md)).
 
 ## Settings
 
@@ -113,6 +145,11 @@ defaults write com.rikuws.docknotch searchQualifier "org:acme"
   `Views/DetailModel.swift` decides what each popover says and parses comment Markdown;
   `Views/DetailView.swift` draws it. The app is rarely active, so AppKit doesn't send it
   mouse moves; both panels follow the pointer with event monitors while it's over them.
+- `Updates/` keeps the app current. `scripts/bundle.sh` stamps Info.plist with where a
+  build came from: a release (`CHANNEL=release`) updates with Sparkle from the appcast on
+  the latest GitHub release; a build from source records its checkout and commit, and
+  `SourceUpdater.swift` watches the upstream releases and runs `make update` in that
+  checkout. [RELEASING.md](RELEASING.md) covers publishing a release.
 
 ### Previewing cards
 

@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var hostingView = NotchHostingView(store: store)
     private lazy var tracker = DockTracker { [weak self] geometry in self?.place(for: geometry) }
     private lazy var details = DetailController(store: store)
+    private let updater = Updater()
     private var hasPlaced = false
     private var dock: DockGeometry?
     /// Where the strip sits beside the Dock, and where it slides to when the Dock hides.
@@ -25,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         panel.contentView = hostingView
         tracker.start()
         store.start()
+        updater.start()
     }
 
     // MARK: - Placement
@@ -137,7 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Menu
 
-    private enum Tag: Int { case accessibility = 1, login }
+    private enum Tag: Int { case accessibility = 1, login, update }
 
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
@@ -152,6 +154,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         login.target = self
         login.tag = Tag.login.rawValue
         menu.addItem(.separator())
+        menu.addItem(withTitle: updater.build.title, action: nil, keyEquivalent: "").isEnabled = false
+        let update = menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        update.target = self
+        update.tag = Tag.update.rawValue
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Dock Notch", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         return menu
     }
@@ -159,6 +166,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.item(withTag: Tag.accessibility.rawValue)?.isHidden = tracker.isTrusted
         menu.item(withTag: Tag.login.rawValue)?.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        if let update = menu.item(withTag: Tag.update.rawValue) {
+            update.title = updater.menuTitle ?? ""
+            update.isHidden = updater.menuTitle == nil
+        }
+    }
+
+    @objc private func checkForUpdates() {
+        updater.checkForUpdates()
     }
 
     @objc private func refreshNow() {
