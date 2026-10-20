@@ -11,7 +11,8 @@ if let flag = arguments.firstIndex(of: "--render"), arguments.indices.contains(f
         await CardRenderer.run(
             outputDirectory: arguments[flag + 1],
             sample: arguments.contains("--sample"),
-            width: CGFloat(width)
+            width: CGFloat(width),
+            details: arguments.contains("--details")
         )
         exit(0)
     }

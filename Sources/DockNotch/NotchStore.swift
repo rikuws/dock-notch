@@ -20,6 +20,8 @@ final class NotchStore {
     private(set) var current: CardKind = .contributions
     /// Bumped whenever the notch jumps to a card because its data changed.
     private(set) var highlight = 0
+    /// True while the pointer is on the strip or its popover. Nothing moves meanwhile:
+    /// the card stays put and fresh data waits until the pointer leaves.
     private(set) var isHovering = false
     /// Stat tiles currently on screen, decided by the space beside the Dock.
     private(set) var visibleTiles: [TileKind] = []
@@ -29,6 +31,7 @@ final class NotchStore {
     let avatars = AvatarCache()
 
     @ObservationIgnored private var nextRotation = Date.distantFuture
+    @ObservationIgnored private var heldSnapshot: Snapshot?
     @ObservationIgnored private var client: GitHubClient?
     @ObservationIgnored private var loops: [Task<Void, Never>] = []
 
@@ -64,23 +67,17 @@ final class NotchStore {
         })
     }
 
-    func refresh() async {
+    /// Fetches fresh data. While the strip is hovered it's held back until the pointer
+    /// leaves, unless `immediately`, as for Refresh Now.
+    func refresh(immediately: Bool = false) async {
         do {
             let client = try await resolveClient()
             let fresh = try await client.fetchSnapshot(qualifier: Settings.searchQualifier)
-            let previous = snapshot
-            snapshot = fresh
-            status = .ready
             avatars.preload(fresh.avatarURLs)
-
-            if let previous {
-                if let changed = Self.notableChange(from: previous, to: fresh) {
-                    announce(changed)
-                } else if !cards.contains(current) {
-                    step(1)
-                }
+            if isHovering && snapshot != nil && !immediately {
+                heldSnapshot = fresh
             } else {
-                show(.contributions, highlight: false)
+                apply(fresh)
             }
         } catch {
             // Keep showing stale data rather than replacing it with an error.
@@ -90,9 +87,14 @@ final class NotchStore {
     }
 
     func setHovering(_ hovering: Bool) {
+        guard hovering != isHovering else { return }
         isHovering = hovering
         if !hovering {
             nextRotation = max(nextRotation, .now + Settings.rotationInterval / 2)
+            if let held = heldSnapshot {
+                heldSnapshot = nil
+                apply(held)
+            }
         }
     }
 
@@ -144,6 +146,23 @@ final class NotchStore {
         case .comment: return snapshot.latestComment?.url
         case .checks: return snapshot.checks?.firstFailing?.url ?? URL(string: "https://github.com/pulls")
         case .merged: return snapshot.merged.latest?.url
+        }
+    }
+
+    private func apply(_ fresh: Snapshot) {
+        let previous = snapshot
+        snapshot = fresh
+        status = .ready
+        heldSnapshot = nil
+
+        if let previous {
+            if let changed = Self.notableChange(from: previous, to: fresh) {
+                announce(changed)
+            } else if !cards.contains(current) {
+                step(1)
+            }
+        } else {
+            show(.contributions, highlight: false)
         }
     }
 

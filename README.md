@@ -36,12 +36,31 @@ so the Accessibility grant survives rebuilds. Override it with `SIGN_IDENTITY="â
   10pt gap between the Dock, each box and the screen edge, and the Dock's 10pt inset inside
   each box. It scales with your Dock size.
 - The strip comes and goes with the Dock. When the Dock auto-hides, or a full-screen app takes
-  over its screen, the strip slides away too, and it slides back when the Dock does.
+  over its screen, the strip slides away too, and it slides back when the Dock does. While
+  you hover over it or its popover, it stays out even if the Dock hides.
 - The rotating card keeps about 400pt; tiles for open PRs, review requests, checks, merges and
   this week's contributions are added in that order as space allows.
 - A tile takes its card out of the rotation, so the card only cycles through what the tiles
   don't already show.
-- Cards rotate every 7 seconds. Hovering pauses the rotation.
+- Cards rotate every 7 seconds.
+- Rest the pointer on the card or a tile and a popover opens above it with the detail behind
+  it, so you don't have to open GitHub:
+  - **Latest comment**: the conversation on that pull request, with full comments, review
+    verdicts, inline comments with their file, quotes, code and suggested changes. It opens
+    scrolled to the newest.
+  - **Open PRs**: each one with what it needs, most urgent first (failing checks, changes
+    requested, ready to merge, in review, drafts), and its size.
+  - **To review**: who asked, how big it is and how long it's been open.
+  - **Checks**: which checks failed or are still running, by name.
+  - **Merged**: what merged and when.
+  - **Contributions** and **This week**: the last two weeks day by day, your streak, how the
+    week compares and your busiest day.
+
+  Boxes with nothing more to show get no popover. Once one is open, moving to another box
+  switches it right away. Click a row to open it on GitHub.
+- While the pointer is on the strip or a popover, nothing changes under it: the card doesn't
+  rotate or jump to news, and fresh data waits until the pointer leaves (Refresh Now still
+  applies at once).
 - Scroll over the strip to flip between cards.
 - Click a card or tile to open it on GitHub (the comment, the failing PR, your PR list, and so on).
 - When something changes (a new comment, a new review request, a failing check, a merge), the
@@ -66,9 +85,11 @@ defaults write com.rikuws.docknotch searchQualifier "org:acme"
 
 ## How it works
 
-- `GitHub/GitHubClient.swift` makes one `gh api graphql` call per refresh (it costs 1 point of
-  the 5,000/hour rate limit). It runs four searches (your open PRs, review requests, PRs merged
-  this week, and recent PRs involving you) and reads your contribution calendar.
+- `GitHub/GitHubClient.swift` makes one `gh api graphql` call per refresh (it costs 2 points of
+  the 5,000/hour rate limit). It runs four searches (your open PRs with their checks, review
+  requests, PRs merged this week, and recent open PRs involving you with their latest comments
+  and reviews) and reads your contribution calendar. Comments on merged or closed PRs never
+  reach the card.
 - `GitHub/Snapshot.swift` turns that into the numbers on the cards. The "latest comment" is the
   newest comment or review by someone other than you, ignoring bots; your own comments show
   only when nobody else has said anything.
@@ -86,10 +107,16 @@ defaults write com.rikuws.docknotch searchQualifier "org:acme"
   on its live size, so the strip reflows smoothly while the Dock resizes.
 - `Views/` holds the rest of the SwiftUI strip. Card rows swap with a staggered lift-and-blur,
   counts tick with numeric text transitions, and the contribution chart draws in from the left.
+- `DetailPanel.swift` opens the popovers: after 350 ms on a box, then instantly from box to box
+  while one is open, closing 250 ms after the pointer leaves both the strip and the popover.
+  `Views/DetailModel.swift` decides what each popover says and parses comment Markdown;
+  `Views/DetailView.swift` draws it. The app is rarely active, so AppKit doesn't send it
+  mouse moves; both panels follow the pointer with event monitors while it's over them.
 
 ### Previewing cards
 
 ```bash
-swift run DockNotch --render /tmp/cards --width 625            # live data, 625pt of space
-swift run DockNotch --render /tmp/cards --sample --width 960   # made-up data, wider strip
+swift run DockNotch --render /tmp/cards --width 625                       # live data, 625pt of space
+swift run DockNotch --render /tmp/cards --sample --width 960              # made-up data, wider strip
+swift run DockNotch --render /tmp/cards --sample --width 960 --details    # plus each card's popover
 ```

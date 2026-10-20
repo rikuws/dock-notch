@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let panel = NotchPanel()
     private lazy var hostingView = NotchHostingView(store: store)
     private lazy var tracker = DockTracker { [weak self] geometry in self?.place(for: geometry) }
+    private lazy var details = DetailController(store: store)
     private var hasPlaced = false
     private var dock: DockGeometry?
     /// Where the strip sits beside the Dock, and where it slides to when the Dock hides.
@@ -16,6 +17,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         hostingView.contextMenu = makeMenu()
+        hostingView.onPointerChange = { [weak self] inside, box in
+            self?.details.stripPointerChanged(inside: inside, box: box)
+        }
+        hostingView.onClick = { [weak self] in self?.details.dismiss() }
+        details.onEngagedChange = { [weak self] in self?.updateVisibility() }
         panel.contentView = hostingView
         tracker.start()
         store.start()
@@ -73,6 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.dock = dock
         shownFrame = frame
         hiddenFrame = hidden
+        details.stripMoved(to: frame, screen: screen)
 
         if !hasPlaced {
             hasPlaced = true
@@ -92,10 +99,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// Like an extension of the Dock, the strip is only out while the Dock is: it slides
-    /// away when the Dock auto-hides or a full-screen app takes the screen.
+    /// away when the Dock auto-hides or a full-screen app takes the screen. The pointer on
+    /// the strip or its popover keeps it out, so it can still be used after an auto-hiding
+    /// Dock leaves.
     private func updateVisibility() {
         guard let dock else { return }
-        let show = dock.isVisible
+        let show = dock.isVisible || details.isEngaged
         guard show != isShown else { return }
         isShown = show
 
@@ -153,7 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func refreshNow() {
-        Task { await store.refresh() }
+        Task { await store.refresh(immediately: true) }
     }
 
     @objc private func openGitHub() {

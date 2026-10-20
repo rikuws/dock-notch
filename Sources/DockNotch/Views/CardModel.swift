@@ -185,7 +185,7 @@ extension CardModel {
         }
     }
 
-    private static func relative(_ date: Date) -> String {
+    static func relative(_ date: Date) -> String {
         let seconds = max(0, Date.now.timeIntervalSince(date))
         switch seconds {
         case ..<60: return "just now"

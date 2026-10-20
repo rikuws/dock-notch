@@ -42,6 +42,35 @@ struct StripLayout: Equatable {
         tileWidth = min(Self.tileMaxWidth * scale, share)
         heroWidth = min(Self.heroMaxWidth * scale, width - CGFloat(count) * (tileWidth + spacing))
     }
+
+    /// The box `x` points from the strip's leading edge lands on; nil in the gaps.
+    func box(at x: CGFloat) -> StripBox? {
+        if x >= 0, x < heroWidth { return .card }
+        for (index, tile) in tiles.enumerated() {
+            let range = span(ofTileAt: index)
+            if x >= range.lowerBound, x < range.upperBound { return .tile(tile) }
+        }
+        return nil
+    }
+
+    /// Where a box starts and ends, measured from the strip's leading edge.
+    func span(of box: StripBox) -> Range<CGFloat>? {
+        switch box {
+        case .card: 0..<heroWidth
+        case .tile(let tile): tiles.firstIndex(of: tile).map(span(ofTileAt:))
+        }
+    }
+
+    private func span(ofTileAt index: Int) -> Range<CGFloat> {
+        let minX = heroWidth + spacing + CGFloat(index) * (tileWidth + spacing)
+        return minX..<(minX + tileWidth)
+    }
+}
+
+/// A box in the strip: the rotating card or one of the tiles.
+enum StripBox: Hashable {
+    case card
+    case tile(TileKind)
 }
 
 /// A small always-visible box with one number. Listed in the order they're added as

@@ -14,7 +14,8 @@ struct GitHubClient: Sendable {
             "-f", "authored=is:pr is:open author:@me archived:false\(scope)",
             "-f", "review=is:pr is:open review-requested:@me archived:false sort:updated-desc\(scope)",
             "-f", "merged=is:pr author:@me is:merged merged:>=\(weekAgo) sort:updated-desc\(scope)",
-            "-f", "recent=is:pr involves:@me archived:false sort:updated-desc\(scope)",
+            // Only open PRs: talk on merged or closed ones is done with.
+            "-f", "recent=is:pr is:open involves:@me archived:false sort:updated-desc\(scope)",
         ])
 
         let decoder = JSONDecoder()
@@ -54,9 +55,24 @@ struct GitHubClient: Sendable {
         issueCount
         nodes {
           ... on PullRequest {
-            number title url isDraft reviewDecision
+            number title url isDraft reviewDecision additions deletions updatedAt
             repository { nameWithOwner }
-            commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+            commits(last: 1) {
+              nodes {
+                commit {
+                  statusCheckRollup {
+                    state
+                    contexts(first: 50) {
+                      nodes {
+                        __typename
+                        ... on CheckRun { name conclusion status }
+                        ... on StatusContext { context state }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -64,16 +80,16 @@ struct GitHubClient: Sendable {
         issueCount
         nodes {
           ... on PullRequest {
-            number title url createdAt
+            number title url createdAt additions deletions
             repository { nameWithOwner }
             author { __typename login avatarUrl(size: 128) }
           }
         }
       }
-      merged: search(query: $merged, type: ISSUE, first: 1) {
+      merged: search(query: $merged, type: ISSUE, first: 10) {
         issueCount
         nodes {
-          ... on PullRequest { number title url repository { nameWithOwner } }
+          ... on PullRequest { number title url mergedAt repository { nameWithOwner } }
         }
       }
       recent: search(query: $recent, type: ISSUE, first: 15) {
@@ -81,14 +97,14 @@ struct GitHubClient: Sendable {
           ... on PullRequest {
             number title url
             repository { nameWithOwner }
-            comments(last: 3) {
+            comments(last: 6) {
               nodes { id body createdAt url author { __typename login avatarUrl(size: 128) } }
             }
-            reviews(last: 3) {
+            reviews(last: 6) {
               nodes {
                 id body state submittedAt url
                 author { __typename login avatarUrl(size: 128) }
-                comments(first: 1) { nodes { body } }
+                comments(first: 3) { nodes { body path } }
               }
             }
           }
@@ -165,14 +181,28 @@ struct GitHubUser: Decodable {
 struct AuthoredPR: Decodable {
     struct Commit: Decodable {
         struct Inner: Decodable { let statusCheckRollup: Rollup? }
-        struct Rollup: Decodable { let state: String }
+        struct Rollup: Decodable {
+            let state: String
+            let contexts: Search<CheckContext>
+        }
         let commit: Inner
+    }
+    /// A check run (GitHub Actions and other apps) or a commit status (older integrations).
+    struct CheckContext: Decodable {
+        let name: String?
+        let conclusion: String?
+        let status: String?
+        let context: String?
+        let state: String?
     }
     let number: Int
     let title: String
     let url: URL
     let isDraft: Bool
     let reviewDecision: String?
+    let additions: Int
+    let deletions: Int
+    let updatedAt: Date
     let repository: Repository
     let commits: Search<Commit>
 }
@@ -182,6 +212,8 @@ struct RequestedPR: Decodable {
     let title: String
     let url: URL
     let createdAt: Date
+    let additions: Int
+    let deletions: Int
     let repository: Repository
     let author: GitHubUser?
 }
@@ -190,6 +222,7 @@ struct MergedPR: Decodable {
     let number: Int
     let title: String
     let url: URL
+    let mergedAt: Date?
     let repository: Repository
 }
 
@@ -202,7 +235,7 @@ struct RecentPR: Decodable {
         let author: GitHubUser?
     }
     struct Review: Decodable {
-        struct Inline: Decodable { let body: String }
+        struct Inline: Decodable { let body: String; let path: String? }
         let id: String
         let body: String
         let state: String

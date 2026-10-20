@@ -5,6 +5,7 @@ enum Palette {
     static let mint = Color(red: 0.40, green: 0.92, blue: 0.55)
     static let red = Color(red: 0.97, green: 0.32, blue: 0.29)
     static let amber = Color(red: 0.89, green: 0.66, blue: 0.20)
+    static let link = Color(red: 0.45, green: 0.68, blue: 1.0)
 
     static let primary = Color.white.opacity(0.96)
     static let secondary = Color.white.opacity(0.55)
