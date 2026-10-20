@@ -8,6 +8,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var hostingView = NotchHostingView(store: store)
     private lazy var tracker = DockTracker { [weak self] geometry in self?.place(for: geometry) }
     private var hasPlaced = false
+    private var dock: DockGeometry?
+    /// Where the strip sits beside the Dock, and where it slides to when the Dock hides.
+    private var shownFrame = NSRect.zero
+    private var hiddenFrame = NSRect.zero
+    private var isShown = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         hostingView.contextMenu = makeMenu()
@@ -57,16 +62,67 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let frame = strip.insetBy(dx: -notchShadowPadding, dy: -notchShadowPadding)
 
-        if hasPlaced {
+        // A hidden strip waits past the screen edge, where the Dock went.
+        var hidden = frame
+        switch dock.edge {
+        case .bottom: hidden.origin.y -= strip.maxY - screen.minY
+        case .left: hidden.origin.x -= dock.frame.maxX - screen.minX
+        case .right: hidden.origin.x += screen.maxX - dock.frame.minX
+        }
+
+        self.dock = dock
+        shownFrame = frame
+        hiddenFrame = hidden
+
+        if !hasPlaced {
+            hasPlaced = true
+            isShown = dock.isVisible
+            panel.setFrame(isShown ? shownFrame : hiddenFrame, display: true)
+            if isShown { panel.orderFrontRegardless() }
+            return
+        }
+        if isShown && dock.isVisible {
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.3
                 context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1)
                 panel.animator().setFrame(frame, display: true)
             }
+        }
+        updateVisibility()
+    }
+
+    /// Like an extension of the Dock, the strip is only out while the Dock is: it slides
+    /// away when the Dock auto-hides or a full-screen app takes the screen.
+    private func updateVisibility() {
+        guard let dock else { return }
+        let show = dock.isVisible
+        guard show != isShown else { return }
+        isShown = show
+
+        if show {
+            if !panel.isVisible {
+                panel.setFrame(hiddenFrame, display: true)
+                panel.alphaValue = 0
+                panel.orderFrontRegardless()
+            }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.3
+                context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1)
+                panel.animator().setFrame(shownFrame, display: true)
+                panel.animator().alphaValue = 1
+            }
         } else {
-            panel.setFrame(frame, display: true)
-            panel.orderFrontRegardless()
-            hasPlaced = true
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.2
+                context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                panel.animator().setFrame(hiddenFrame, display: true)
+                panel.animator().alphaValue = 0
+            } completionHandler: { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, !self.isShown else { return }
+                    self.panel.orderOut(nil)
+                }
+            }
         }
     }
 

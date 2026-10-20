@@ -11,8 +11,9 @@ final class NotchPanel: NSPanel {
             defer: false
         )
         level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.dockWindow)) + 1)
-        // Not .fullScreenAuxiliary: like the Dock, the notch stays out of full-screen apps.
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        // Allowed over full-screen apps so it can come out with the Dock there. The app
+        // keeps it hidden whenever the Dock is.
+        collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false

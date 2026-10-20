@@ -23,8 +23,9 @@ make install    # copy it to /Applications and open it
 
 On first launch macOS asks for **Accessibility** access. Dock Notch uses it only to read the
 Dock's size, so the strip can fill exactly the space beside it and follow it as apps come and
-go. Without it, only the rotating card shows, at the right edge of the Dock's area. You can
-grant it later from the right-click menu.
+go. Without it, only the rotating card shows, at the right edge of the Dock's area, and an
+auto-hiding Dock can't be followed, so the card stays up. You can grant it later from the
+right-click menu.
 
 `scripts/bundle.sh` signs the app with your Apple Development identity when one is installed,
 so the Accessibility grant survives rebuilds. Override it with `SIGN_IDENTITY="â€¦"`.
@@ -34,6 +35,8 @@ so the Accessibility grant survives rebuilds. Override it with `SIGN_IDENTITY="â
 - The strip matches the Dock: the same height and vertical position as the Dock's glass, a
   10pt gap between the Dock, each box and the screen edge, and the Dock's 10pt inset inside
   each box. It scales with your Dock size.
+- The strip comes and goes with the Dock. When the Dock auto-hides, or a full-screen app takes
+  over its screen, the strip slides away too, and it slides back when the Dock does.
 - The rotating card keeps about 400pt; tiles for open PRs, review requests, checks, merges and
   this week's contributions are added in that order as space allows.
 - A tile takes its card out of the rotation, so the card only cycles through what the tiles
@@ -73,8 +76,12 @@ defaults write com.rikuws.docknotch searchQualifier "org:acme"
   every 60 ms for a moment after an app launches or quits, so the strip follows the Dock's
   resize animation. On macOS 26 that frame sits about 4.5pt above the glass you see, so the
   vertical position comes from the top of the screen area reserved for the Dock instead.
+  A hidden Dock's frame sits off screen; once it's more than halfway out, the Dock counts as
+  hidden. A hidden Dock is checked every 250 ms, and every 60 ms while the pointer is near
+  the edge it slides in from.
 - `NotchPanel.swift` is a borderless, non-activating panel one level above the Dock. It shows on
-  every Space and stays out of full-screen apps, like the Dock.
+  every Space, full-screen ones included, so it can come out with the Dock over a full-screen
+  app. `AppDelegate.swift` keeps it hidden whenever the Dock is.
 - `Views/StripLayout.swift` decides how many tiles fit and how wide each box is. The view runs it
   on its live size, so the strip reflows smoothly while the Dock resizes.
 - `Views/` holds the rest of the SwiftUI strip. Card rows swap with a staggered lift-and-blur,
