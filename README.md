@@ -39,7 +39,8 @@ so the Accessibility grant survives rebuilds. Override it with `SIGN_IDENTITY="â
   over its screen, the strip slides away too, and it slides back when the Dock does. While
   you hover over it or its popover, it stays out even if the Dock hides.
 - The rotating card keeps about 400pt; tiles for open PRs, review requests, checks, merges and
-  this week's contributions are added in that order as space allows.
+  this week's contributions are added in that order as space allows. Tiles are all one size,
+  like Dock icons, and the card takes whatever space is left, up to 600pt.
 - A tile takes its card out of the rotation, so the card only cycles through what the tiles
   don't already show.
 - Cards rotate every 7 seconds.

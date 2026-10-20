@@ -1,13 +1,13 @@
 import SwiftUI
 
 /// How the free space beside the Dock is shared: the rotating card keeps its preferred
-/// width, and as many stat tiles as fit fill the rest. Leftover space widens the tiles,
-/// then the card.
+/// width, and as many stat tiles as fit fill the rest. Tiles are all one size, like Dock
+/// icons, so leftover space widens the card, whose chart and text stretch well.
 struct StripLayout: Equatable {
     static let heroPreferredWidth: CGFloat = 400
     private static let heroMaxWidth: CGFloat = 600
-    private static let tileMinWidth: CGFloat = 100
-    private static let tileMaxWidth: CGFloat = 136
+    /// Just wide enough for a tile's longest lines, such as "1 in review".
+    private static let fixedTileWidth: CGFloat = 104
 
     let heroWidth: CGFloat
     let tileWidth: CGFloat
@@ -25,10 +25,10 @@ struct StripLayout: Equatable {
     init(width: CGFloat, height: CGFloat, maxTiles: Int = Settings.maxTiles) {
         let scale = max(height, 1) / 84
         let heroPreferred = Self.heroPreferredWidth * scale
-        let tileMin = Self.tileMinWidth * scale
+        let tile = (Self.fixedTileWidth * scale).rounded()
         spacing = Self.spacing(forHeight: height)
 
-        let fitting = max(0, Int((width - heroPreferred) / (tileMin + spacing)))
+        let fitting = max(0, Int((width - heroPreferred) / (tile + spacing)))
         let count = min(fitting, max(0, maxTiles), TileKind.allCases.count)
         guard count > 0 else {
             heroWidth = max(0, min(width, Self.heroMaxWidth * scale))
@@ -38,9 +38,8 @@ struct StripLayout: Equatable {
         }
 
         tiles = Array(TileKind.allCases.prefix(count))
-        let share = ((width - heroPreferred) / CGFloat(count) - spacing).rounded(.down)
-        tileWidth = min(Self.tileMaxWidth * scale, share)
-        heroWidth = min(Self.heroMaxWidth * scale, width - CGFloat(count) * (tileWidth + spacing))
+        tileWidth = tile
+        heroWidth = min(Self.heroMaxWidth * scale, width - CGFloat(count) * (tile + spacing))
     }
 
     /// The box `x` points from the strip's leading edge lands on; nil in the gaps.
