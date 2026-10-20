@@ -35,6 +35,12 @@ enum Settings {
         get { defaults.bool(forKey: "didPromptForAccessibility") }
         set { defaults.set(newValue, forKey: "didPromptForAccessibility") }
     }
+
+    /// The newest release a build from source has already offered to update to.
+    static var offeredSourceUpdate: String? {
+        get { defaults.string(forKey: "offeredSourceUpdate") }
+        set { defaults.set(newValue, forKey: "offeredSourceUpdate") }
+    }
 }
 
 private extension Double {
