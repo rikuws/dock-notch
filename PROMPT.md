@@ -5,7 +5,7 @@ Dock Notch from scratch: a macOS app that fills the space beside the Dock with y
 activity. Give the agent this whole file. Add what you'd like done differently at the end,
 under **Your changes**, or tell the agent as it goes.
 
-It describes **Dock Notch 0.1.0**. Each release updates this file, so the difference
+It describes **Dock Notch 0.2.0**. Each release updates this file, so the difference
 between two versions of it is what changed (see "Later releases" at the end).
 
 ![The strip with two tiles](docs/strip.png)
@@ -176,6 +176,21 @@ Shorten repositories to their name (`acme/app` → `app`); a PR's label is `app#
 
 - Fetch every 60 seconds (`refreshInterval`, at least 20). The card rotates every 7 seconds
   (`rotationInterval`, at least 3) through the cards worth showing that no tile covers.
+- **How long a card stays up depends on what it asks of you.** A card *needs you* when:
+  open PRs has one that isn't a draft and is failing checks, has changes requested, or is
+  approved with checks passing (or none); reviews has any requests; the latest comment is
+  from someone else and under a day old; checks has a failure. Checks with only running
+  ones is *routine*; open PRs with nothing needing you is routine. Everything else is
+  *quiet*: contributions, merges, all checks passing, an old or own comment.
+- Remember what each card needed when you last had a proper look at it, as a signature
+  (the sorted URLs of the review requests, of failing PRs, of actionable PRs with their
+  state; the latest comment's id). You've had a look when its popover opened, the window
+  showed it, or it stayed up its full time. A card that needs you and whose signature
+  differs from the remembered one is *new*.
+- Stay up for the interval times: 2 when new, 1.25 when it needs you but you've seen it,
+  1 when routine, 0.65 when quiet, never under 3 seconds. A card the rotation jumps to for
+  news stays at least 1.6 times. Quiet cards come round only every other lap of the
+  rotation, unless nothing else is left to show.
 - **While the pointer is on the strip or a popover, nothing moves**: the card doesn't
   rotate or jump, and a fresh snapshot waits until the pointer leaves (Refresh Now still
   applies at once). After it leaves, the next rotation is at least half an interval away.
@@ -317,6 +332,10 @@ pointer moves within the Dock's thickness plus 40pt of an edge that doesn't rese
   Dock comes back, it slides back in and fades up (0.3s, cubic 0.2, 0.9, 0.3, 1). Moves
   while shown animate the same way. **While the pointer is on the strip or a popover, it
   stays out** even if the Dock hides.
+- **When the Dock moves to another display, don't animate the window across.** A window
+  slid from a Retina to a non-Retina display can end up in place, still taking the pointer,
+  but no longer drawn. Close any popover, order the strip out and bring it in afresh from
+  its hidden position on the new display, as when the Dock appears.
 
 ### The window
 
@@ -335,7 +354,7 @@ pointer moves within the Dock's thickness plus 40pt of an edge that doesn't rese
 
 ### The right-click menu
 
-Refresh Now (⌘R), Open GitHub, Enable Precise Dock Tracking… (only while Accessibility
+Refresh Now (⌘R), Open Window (⌘O, below), Open GitHub, Enable Precise Dock Tracking… (only while Accessibility
 isn't granted; it prompts and opens that pane of System Settings), Open at Login (a
 checkmark, using `SMAppService.mainApp`), and Quit Dock Notch (⌘Q).
 
@@ -385,6 +404,50 @@ checkmark, using `SMAppService.mainApp`), and Quit Dock Notch (⌘Q).
   streak going"), how this week compares ("up from", "down from", "same as the week
   before") and the busiest day.
 
+## The larger window
+
+A card in the middle of the screen with the whole of one section, which stays until you
+close it, for looking at things properly rather than in passing.
+
+- A borderless, non-activating `NSPanel` that **can** become key (so it takes the keyboard
+  without bringing the app forward), at the floating level, moving to the active Space and
+  allowed over full-screen apps. It closes when it resigns key, so a click elsewhere
+  closes it.
+- On the screen with the pointer: centered horizontally, its top edge 16% of the visible
+  height below the top, growing downwards. Its height follows its content up to 680pt or
+  72% of the visible height, keeping the top edge still while it changes. It opens by
+  rising 8pt and fading in over 0.2s, and closes by fading out over 0.12s.
+- The popover's look at 600pt wide, with a row of section tabs above the header and a
+  hairline under them: 12pt text, medium in secondary, the selected one semibold in primary
+  on a capsule of white at 12% (white at 6% under the pointer). A 5pt dot follows the name
+  of a section that needs you: green when new, tertiary when seen. Only sections with
+  something to show get a tab, in rotation order.
+- The same content as the popovers, but up to 50 rows before "N more on GitHub". Showing a
+  section counts as having seen it. It re-renders when the data changes; if its section
+  empties, it moves to the first that's left.
+- Keys: ← → or Tab and ⇧Tab switch sections, 1–6 jump to one, ↓ ↑ pick a row or comment
+  (lit like the one under the pointer, scrolled into view), ↩ opens it, or the header's
+  page with nothing picked, and closes the window. ⌘R refreshes now, ⌘W and Esc close.
+- Without a section, open on the first of reviews, comment, checks and open PRs that has
+  something new for you, otherwise the card on the strip.
+
+### Links
+
+Register the `docknotch` URL scheme (`CFBundleURLTypes`) and handle `kAEGetURL` Apple
+events with `NSAppleEventManager` from `applicationWillFinishLaunching`.
+
+| Link | Does |
+| --- | --- |
+| `docknotch://show/<section>` (or `open`) | Opens the window on a section |
+| `docknotch://toggle/<section>` | Closes it when it's showing that section (or any, without one), otherwise opens it there |
+| `docknotch://close` (or `hide`) | Closes it |
+| `docknotch://refresh` | Refreshes now |
+| `docknotch://<section>` | Like `show` |
+
+Sections are optional, and case doesn't matter: `activity` or `contributions`; `prs`,
+`pulls`, `pull-requests` or `open-prs`; `comments`, `comment` or `conversation`; `reviews`,
+`review` or `review-requests`; `checks` or `ci`; `merged` or `merges`.
+
 ## Settings
 
 Read from `defaults` under your bundle identifier, applied on the next launch:
@@ -397,7 +460,8 @@ Add a development mode that renders without a screen:
 `DockNotch --render <dir> [--sample] [--width <points>] [--details]` writes the strip as a
 PNG (2x, on a colorful background) once per rotating card, at an 84pt height and the given
 width of space beside the Dock; `--sample` uses made-up data that fills every card;
-`--details` also writes each popover at its full height. Look at the images after each
+`--details` also writes each popover at its full height, and the larger window once per
+section. Look at the images after each
 change, at widths like 625 and 960. Then run the app, try a bottom, left and right Dock,
 auto-hide, a full-screen app, and with and without Accessibility access.
 

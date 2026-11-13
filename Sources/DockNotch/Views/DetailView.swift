@@ -25,24 +25,40 @@ struct DetailView: View {
     let avatars: AvatarCache
     let pointer: DetailPointer
     let open: (URL) -> Void
+    var width: CGFloat = DetailMetrics.width
+    /// Shown above the header, as the section tabs in the larger window.
+    var top: AnyView?
+    /// The row or comment picked with the keyboard, lit like the one under the pointer.
+    var selection: String?
 
     var body: some View {
         if let model {
             let shape = RoundedRectangle(cornerRadius: DetailMetrics.radius, style: .continuous)
             VStack(alignment: .leading, spacing: 0) {
+                if let top {
+                    top
+                    Rectangle().fill(Palette.hairline).frame(height: 1)
+                }
                 header(model.header)
                 Rectangle().fill(Palette.hairline).frame(height: 1)
                 ViewThatFits(in: .vertical) {
                     content(model.content)
-                    ScrollView {
-                        content(model.content)
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            content(model.content)
+                        }
+                        .scrollIndicators(.never)
+                        // A conversation reads up to the latest comment, at the bottom.
+                        .defaultScrollAnchor(model.isConversation ? .bottom : .top)
+                        .onChange(of: selection) { _, id in
+                            guard let id else { return }
+                            withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(id) }
+                        }
                     }
-                    .scrollIndicators(.never)
-                    // A conversation reads up to the latest comment, at the bottom.
-                    .defaultScrollAnchor(model.isConversation ? .bottom : .top)
                 }
             }
-            .frame(width: DetailMetrics.width, alignment: .leading)
+            .frame(width: width, alignment: .leading)
+            .environment(\.detailSelection, selection)
             .background(shape.fill(.black))
             .clipShape(shape)
             .overlay(shape.strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
@@ -94,9 +110,11 @@ struct DetailView: View {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(rows) { row in
                     RowView(row: row, avatars: avatars, pointer: pointer, open: open)
+                        .id(row.id)
                 }
                 if let more {
                     RowView(row: more, avatars: avatars, pointer: pointer, open: open)
+                        .id(more.id)
                 }
             }
             .padding(6)
@@ -104,6 +122,7 @@ struct DetailView: View {
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(entries) { entry in
                     EntryView(entry: entry, avatars: avatars, pointer: pointer, open: open)
+                        .id(entry.id)
                 }
             }
             .padding(6)
@@ -153,7 +172,7 @@ private struct RowView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
-        .modifier(Hoverable(pointer: pointer))
+        .modifier(Hoverable(pointer: pointer, id: row.id))
         .onTapGesture { row.url.map(open) }
     }
 }
@@ -210,7 +229,7 @@ private struct EntryView: View {
             }
         }
         .padding(10)
-        .modifier(Hoverable(pointer: pointer, radius: 12))
+        .modifier(Hoverable(pointer: pointer, id: entry.id, radius: 12))
         .onTapGesture { open(entry.url) }
     }
 }
@@ -413,7 +432,10 @@ private struct Avatar: View {
 /// Lights up a row under the pointer, so it reads as something to click.
 private struct Hoverable: ViewModifier {
     let pointer: DetailPointer
+    let id: String
     var radius: CGFloat = 10
+
+    @Environment(\.detailSelection) private var selection
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
@@ -421,12 +443,35 @@ private struct Hoverable: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 GeometryReader { geometry in
-                    let hovered = pointer.location.map { geometry.frame(in: .named(DetailPointer.space)).contains($0) } ?? false
+                    let hovered = selection == id
+                        || pointer.location.map { geometry.frame(in: .named(DetailPointer.space)).contains($0) } ?? false
                     shape
                         .fill(Color.white.opacity(hovered ? 0.08 : 0))
                         .animation(.easeOut(duration: 0.12), value: hovered)
                 }
             }
             .contentShape(shape)
+    }
+}
+
+private struct DetailSelectionKey: EnvironmentKey {
+    static let defaultValue: String? = nil
+}
+
+extension EnvironmentValues {
+    var detailSelection: String? {
+        get { self[DetailSelectionKey.self] }
+        set { self[DetailSelectionKey.self] = newValue }
+    }
+}
+
+extension DetailModel {
+    /// What the keyboard can step through, in order, with where each leads.
+    var selectable: [(id: String, url: URL?)] {
+        switch content {
+        case .rows(let rows, let more): (rows + (more.map { [$0] } ?? [])).map { ($0.id, $0.url) }
+        case .conversation(let entries): entries.map { ($0.id, $0.url) }
+        case .activity: []
+        }
     }
 }

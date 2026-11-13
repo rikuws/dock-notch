@@ -6,6 +6,15 @@ enum CardKind: String, CaseIterable {
     case contributions, openPRs, comment, reviews, checks, merged
 }
 
+/// How much a card asks of you, which decides how long it stays up.
+enum Attention: Comparable {
+    /// Just numbers, like contributions or recent merges: a short look, every other lap.
+    case quiet
+    case routine
+    /// Something waits on you, such as a review request or a failing check.
+    case needsYou
+}
+
 @MainActor
 @Observable
 final class NotchStore {
@@ -31,6 +40,11 @@ final class NotchStore {
     let avatars = AvatarCache()
 
     @ObservationIgnored private var nextRotation = Date.distantFuture
+    /// What each card needed from you when you last had a proper look at it. Once seen,
+    /// a card that needs you no longer holds the rotation as long.
+    @ObservationIgnored private var seen: [CardKind: String] = [:]
+    /// Counts trips round the rotation, so quiet cards can sit out every other one.
+    @ObservationIgnored private var lap = 0
     @ObservationIgnored private var heldSnapshot: Snapshot?
     @ObservationIgnored private var client: GitHubClient?
     @ObservationIgnored private var loops: [Task<Void, Never>] = []
@@ -110,6 +124,32 @@ final class NotchStore {
         show(kind, highlight: false)
     }
 
+    /// Notes that you've had a proper look at a card, as when hovering it or opening it
+    /// in the larger window, so it stops asking for extra time.
+    func markSeen(_ box: StripBox) {
+        markSeen(kind(for: box))
+    }
+
+    func kind(for box: StripBox) -> CardKind {
+        switch box {
+        case .card: current
+        case .tile(let tile): tile.replacesCard ?? .contributions
+        }
+    }
+
+    func markSeen(_ kind: CardKind) {
+        guard let snapshot else { return }
+        seen[kind] = Self.signature(of: kind, in: snapshot)
+    }
+
+    /// Whether a card needs you, and if so whether that's news since you last looked.
+    func attention(of kind: CardKind) -> (level: Attention, isNew: Bool) {
+        guard let snapshot else { return (.routine, false) }
+        let level = Self.attention(of: kind, in: snapshot)
+        let isNew = level == .needsYou && seen[kind] != Self.signature(of: kind, in: snapshot)
+        return (level, isNew)
+    }
+
     func setVisibleTiles(_ tiles: [TileKind]) {
         guard tiles != visibleTiles else { return }
         visibleTiles = tiles
@@ -181,12 +221,88 @@ final class NotchStore {
         }
         if highlight { self.highlight += 1 }
         // News lingers a little longer than routine rotation.
-        nextRotation = .now + Settings.rotationInterval * (highlight ? 1.6 : 1)
+        nextRotation = .now + max(3, Settings.rotationInterval * max(dwell(for: kind), highlight ? 1.6 : 0))
+    }
+
+    /// How long a card stays up, as a share of the rotation interval: twice as long when it
+    /// has something new for you, a little longer while it still needs you, less when it's
+    /// only numbers.
+    private func dwell(for kind: CardKind) -> Double {
+        switch attention(of: kind) {
+        case (.needsYou, true): 2
+        case (.needsYou, false): 1.25
+        case (.routine, _): 1
+        case (.quiet, _): 0.65
+        }
     }
 
     private func tick() {
         guard !isHovering, cards.count > 1, Date.now >= nextRotation else { return }
+        // Staying up for its full time counts as having seen it.
+        markSeen(current)
+        advance()
+    }
+
+    /// The rotation's next card. Quiet cards come round every other lap, unless that
+    /// would leave nothing else to show.
+    private func advance() {
+        let list = cards
+        guard let index = list.firstIndex(of: current) else { return step(1) }
+        for offset in 1..<list.count {
+            let position = index + offset
+            let kind = list[position % list.count]
+            let nextLap = lap + position / list.count
+            if attention(of: kind).level != .quiet || nextLap.isMultiple(of: 2) {
+                lap = nextLap
+                return show(kind, highlight: false)
+            }
+        }
+        lap += 1
         step(1)
+    }
+
+    private static func attention(of kind: CardKind, in snapshot: Snapshot) -> Attention {
+        switch kind {
+        case .contributions, .merged:
+            return .quiet
+        case .openPRs:
+            return actionable(snapshot.openPRs.items).isEmpty ? .routine : .needsYou
+        case .reviews:
+            return snapshot.reviewQueue.count > 0 ? .needsYou : .quiet
+        case .comment:
+            guard let comment = snapshot.latestComment else { return .quiet }
+            return !comment.byViewer && Date.now.timeIntervalSince(comment.date) < 86_400 ? .needsYou : .quiet
+        case .checks:
+            guard let checks = snapshot.checks else { return .quiet }
+            if checks.failing > 0 { return .needsYou }
+            return checks.pending > 0 ? .routine : .quiet
+        }
+    }
+
+    /// What a card needs from you, so a change to it reads as news.
+    private static func signature(of kind: CardKind, in snapshot: Snapshot) -> String {
+        switch kind {
+        case .contributions: "\(snapshot.contributions.total)"
+        case .openPRs: actionable(snapshot.openPRs.items).joined(separator: " ")
+        case .reviews: snapshot.reviewQueue.items.map(\.ref.url.absoluteString).sorted().joined(separator: " ")
+        case .comment: snapshot.latestComment?.id ?? ""
+        case .checks: snapshot.openPRs.items.filter { $0.checks == .failing }.map(\.ref.url.absoluteString).sorted().joined(separator: " ")
+        case .merged: snapshot.merged.items.map(\.ref.url.absoluteString).joined(separator: " ")
+        }
+    }
+
+    /// Your pull requests waiting on you: failing, sent back with changes, or ready to merge.
+    private static func actionable(_ prs: [Snapshot.PullRequest]) -> [String] {
+        prs.compactMap { pr in
+            guard pr.review != .draft else { return nil }
+            let state = switch (pr.checks, pr.review) {
+            case (.failing, _): "failing"
+            case (_, .changesRequested): "changes"
+            case (.passing, .approved), (.none, .approved): "ready"
+            default: ""
+            }
+            return state.isEmpty ? nil : "\(pr.ref.url.absoluteString)=\(state)"
+        }.sorted()
     }
 
     private func resolveClient() async throws -> GitHubClient {

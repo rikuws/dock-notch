@@ -73,6 +73,33 @@ enum CardRenderer {
             try? png?.write(to: url)
             print(url.path)
         }
+
+        // The larger window, once per section.
+        guard let snapshot = store.snapshot else { return }
+        let sections = CardKind.allCases.filter { DetailModel.make(for: $0, snapshot: snapshot, rows: 1) != nil }
+        for kind in sections {
+            let tabs = sections.map { section in
+                let attention = store.attention(of: section)
+                return SectionView.Tab(kind: section, needsYou: attention.level == .needsYou, isNew: attention.isNew)
+            }
+            let model = DetailModel.make(for: kind, snapshot: snapshot, rows: 50)
+            let canvas = SectionView(
+                kind: kind, tabs: tabs, model: model, selection: model?.selectable.dropFirst().first?.id,
+                avatars: store.avatars, pointer: DetailPointer(), select: { _ in }, open: { _ in }
+            )
+            .environment(\.notchIsStatic, true)
+            .background(LinearGradient(
+                colors: [Color(red: 0.35, green: 0.55, blue: 0.85), Color(red: 0.55, green: 0.35, blue: 0.75)],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            ))
+            let renderer = ImageRenderer(content: canvas)
+            renderer.scale = 2
+            guard let image = renderer.cgImage else { continue }
+            let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
+            let url = directory.appendingPathComponent("window-\(kind.rawValue).png")
+            try? png?.write(to: url)
+            print(url.path)
+        }
     }
 }
 

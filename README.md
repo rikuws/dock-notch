@@ -64,7 +64,12 @@ so the Accessibility grant survives rebuilds. Override it with `SIGN_IDENTITY="�
   like Dock icons, and the card takes whatever space is left, up to 600pt.
 - A tile takes its card out of the rotation, so the card only cycles through what the tiles
   don't already show.
-- Cards rotate every 7 seconds.
+- Cards rotate every 7 seconds, adjusted by what they ask of you. A card with something new
+  that needs you (a review request, a failing check, a comment from someone else today, a PR
+  that's ready to merge or sent back) stays twice as long. Once you've seen it, by hovering
+  it, opening it in the window or letting it stay up its full time, it stays a quarter longer
+  than usual. Cards that are only numbers (contributions, merges, all checks passing) stay
+  about two thirds as long and come round every other lap.
 - Rest the pointer on the card or a tile and a popover opens above it with the detail behind
   it, so you don't have to open GitHub:
   - **Latest comment**: the conversation on that pull request, with full comments, review
@@ -87,8 +92,33 @@ so the Accessibility grant survives rebuilds. Override it with `SIGN_IDENTITY="�
 - Click a card or tile to open it on GitHub (the comment, the failing PR, your PR list, and so on).
 - When something changes (a new comment, a new review request, a failing check, a merge), the
   tile showing it glows briefly, or the card jumps to it and glows.
-- Right-click for Refresh, Open at Login, Check for Updates and Quit. The menu also shows
+- Right-click for Refresh, Open Window, Open at Login, Check for Updates and Quit. The menu also shows
   which version you're running.
+
+## The window
+
+For a proper look whenever you want, open a larger card in the middle of the screen with
+the whole of a section: every pull request waiting for your review, all your open PRs, the
+full conversation. It uses the popovers' style, with tabs for each section. A green dot on a
+tab means something new needs you there; a grey one, something you've already seen.
+
+Open it with **Open Window** (⌘O) in the right-click menu, or with a link, which you can
+bind to a hotkey in Raycast, Shortcuts or anything else that opens URLs:
+
+| Link | What it does |
+| --- | --- |
+| `docknotch://show` | Opens on whatever new thing needs you, or the card on the strip |
+| `docknotch://show/reviews` | Opens on a section: `reviews`, `prs`, `checks`, `comments`, `activity` or `merged` |
+| `docknotch://toggle/reviews` | The same, but closes the window if it's already showing that section. The section is optional |
+| `docknotch://close` | Closes the window |
+| `docknotch://refresh` | Fetches from GitHub now |
+
+In the window, ← → or Tab switch sections, 1–6 jump to one, ↑ ↓ pick a row and ↩ opens it on
+GitHub. ⌘R refreshes. Esc or a click anywhere else closes it.
+
+```bash
+open docknotch://toggle/reviews
+```
 
 ## Updates
 
@@ -135,7 +165,12 @@ defaults write com.rikuws.docknotch searchQualifier "org:acme"
   the edge it slides in from.
 - `NotchPanel.swift` is a borderless, non-activating panel one level above the Dock. It shows on
   every Space, full-screen ones included, so it can come out with the Dock over a full-screen
-  app. `AppDelegate.swift` keeps it hidden whenever the Dock is.
+  app. `AppDelegate.swift` keeps it hidden whenever the Dock is. When the Dock moves to
+  another display, the strip doesn't slide across: a window dragged between a Retina and a
+  non-Retina display can stay in place but stop being drawn. It hides and comes up afresh on
+  the new display instead.
+- `SectionWindow.swift` is the larger window and its keyboard handling; `AppDelegate.swift`
+  routes `docknotch://` links to it.
 - `Views/StripLayout.swift` decides how many tiles fit and how wide each box is. The view runs it
   on its live size, so the strip reflows smoothly while the Dock resizes.
 - `Views/` holds the rest of the SwiftUI strip. Card rows swap with a staggered lift-and-blur,

@@ -56,20 +56,24 @@ struct DetailModel {
 }
 
 extension DetailModel {
+    /// Rows a popover lists before "N more on GitHub".
+    static let popoverRows = 6
+
     @MainActor
     static func make(for box: StripBox, store: NotchStore) -> DetailModel? {
         guard let snapshot = store.snapshot else { return nil }
-        let kind: CardKind = switch box {
-        case .card: store.current
-        case .tile(let tile): tile.replacesCard ?? .contributions
-        }
+        return make(for: store.kind(for: box), snapshot: snapshot, rows: popoverRows)
+    }
+
+    /// The detail behind one kind of card, listing at most `rows` rows.
+    static func make(for kind: CardKind, snapshot: Snapshot, rows limit: Int) -> DetailModel? {
         switch kind {
         case .contributions: return activity(snapshot.contributions, login: snapshot.login)
-        case .openPRs: return openPRs(snapshot.openPRs)
+        case .openPRs: return openPRs(snapshot.openPRs, limit: limit)
         case .comment: return conversation(snapshot)
-        case .reviews: return reviews(snapshot.reviewQueue)
-        case .checks: return checks(snapshot.openPRs.items)
-        case .merged: return merged(snapshot.merged)
+        case .reviews: return reviews(snapshot.reviewQueue, limit: limit)
+        case .checks: return checks(snapshot.openPRs.items, limit: limit)
+        case .merged: return merged(snapshot.merged, limit: limit)
         }
     }
 
@@ -103,13 +107,13 @@ extension DetailModel {
         )
     }
 
-    private static func openPRs(_ prs: Snapshot.OpenPRs) -> DetailModel? {
+    private static func openPRs(_ prs: Snapshot.OpenPRs, limit: Int) -> DetailModel? {
         guard !prs.items.isEmpty else { return nil }
         // The ones that need something from you first.
         let ranked = prs.items.sorted {
             (urgency(of: $0), $1.updatedAt) < (urgency(of: $1), $0.updatedAt)
         }
-        let rows = ranked.prefix(6).map { pr in
+        let rows = ranked.prefix(limit).map { pr in
             let (symbol, lead, tint) = status(of: pr)
             return Row(
                 id: pr.ref.url.absoluteString,
@@ -128,9 +132,9 @@ extension DetailModel {
         )
     }
 
-    private static func reviews(_ queue: Snapshot.ReviewQueue) -> DetailModel? {
+    private static func reviews(_ queue: Snapshot.ReviewQueue, limit: Int) -> DetailModel? {
         guard !queue.items.isEmpty else { return nil }
-        let rows = queue.items.prefix(6).map { request in
+        let rows = queue.items.prefix(limit).map { request in
             Row(
                 id: request.ref.url.absoluteString,
                 leading: .avatar(request.avatar, fallback: "person.crop.circle"),
@@ -150,7 +154,7 @@ extension DetailModel {
         )
     }
 
-    private static func checks(_ prs: [Snapshot.PullRequest]) -> DetailModel? {
+    private static func checks(_ prs: [Snapshot.PullRequest], limit: Int) -> DetailModel? {
         let failing = prs.filter { $0.checks == .failing }
         let running = prs.filter { $0.checks == .pending }
         let passing = prs.filter { $0.checks == .passing }
@@ -209,13 +213,13 @@ extension DetailModel {
         return DetailModel(
             id: "checks",
             header: Header(title: "Checks on your pull requests", trailing: "\(passing.count)/\(total) passing", url: URL(string: "https://github.com/pulls")),
-            content: .rows(Array(rows.prefix(6)), more: more)
+            content: .rows(Array(rows.prefix(limit)), more: more)
         )
     }
 
-    private static func merged(_ merged: Snapshot.Merged) -> DetailModel? {
+    private static func merged(_ merged: Snapshot.Merged, limit: Int) -> DetailModel? {
         guard !merged.items.isEmpty else { return nil }
-        let rows = merged.items.prefix(6).map { pr in
+        let rows = merged.items.prefix(limit).map { pr in
             Row(
                 id: pr.ref.url.absoluteString,
                 leading: .symbol("arrow.triangle.merge", Palette.green),

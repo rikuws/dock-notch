@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var hostingView = NotchHostingView(store: store)
     private lazy var tracker = DockTracker { [weak self] geometry in self?.place(for: geometry) }
     private lazy var details = DetailController(store: store)
+    private lazy var sections = SectionController(store: store)
     private let updater = Updater()
     private var hasPlaced = false
     private var dock: DockGeometry?
@@ -15,6 +16,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var shownFrame = NSRect.zero
     private var hiddenFrame = NSRect.zero
     private var isShown = false
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleURLEvent(_:reply:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
+    }
+
+    @objc private func handleURLEvent(_ event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
+        guard let text = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
+              let url = URL(string: text) else { return }
+        handle(url)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         hostingView.contextMenu = makeMenu()
@@ -27,6 +43,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         tracker.start()
         store.start()
         updater.start()
+    }
+
+    // MARK: - Links
+
+    /// `docknotch://show/reviews` opens the larger window on a section; `toggle/…` closes it
+    /// when it's already there, for binding to a hotkey; `close` and `refresh` do what they
+    /// say. Leave out the section for whatever most needs you. A bare section name,
+    /// `docknotch://reviews`, works like `show`.
+    private func handle(_ url: URL) {
+        guard url.scheme?.lowercased() == "docknotch" else { return }
+        let words = ([url.host(percentEncoded: false)] + url.pathComponents.filter { $0 != "/" })
+            .compactMap { $0?.lowercased() }
+            .filter { !$0.isEmpty }
+        let action = words.first ?? "show"
+        let section = words.dropFirst().first.flatMap(CardKind.init(linkName:))
+
+        switch action {
+        case "show", "open": sections.show(section)
+        case "toggle": sections.toggle(section)
+        case "close", "hide": sections.close()
+        case "refresh": Task { await store.refresh(immediately: true) }
+        default:
+            if let kind = CardKind(linkName: action) { sections.show(kind) }
+        }
     }
 
     // MARK: - Placement
@@ -78,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .right: hidden.origin.x += screen.maxX - dock.frame.minX
         }
 
+        let movedScreen = self.dock.map { $0.screenFrame != dock.screenFrame } ?? false
         self.dock = dock
         shownFrame = frame
         hiddenFrame = hidden
@@ -90,7 +131,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if isShown { panel.orderFrontRegardless() }
             return
         }
-        if isShown && dock.isVisible {
+        if movedScreen {
+            // Sliding a window from one display to another, especially between Retina
+            // and non-Retina ones, can leave it in place but no longer drawn. Take it down
+            // and bring it up afresh on the new screen, as when the Dock appears.
+            details.close()
+            panel.orderOut(nil)
+            isShown = false
+        } else if isShown && dock.isVisible {
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.3
                 context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.3, 1)
@@ -145,6 +193,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let menu = NSMenu()
         menu.delegate = self
         menu.addItem(withTitle: "Refresh Now", action: #selector(refreshNow), keyEquivalent: "r").target = self
+        menu.addItem(withTitle: "Open Window", action: #selector(openWindow), keyEquivalent: "o").target = self
         menu.addItem(withTitle: "Open GitHub", action: #selector(openGitHub), keyEquivalent: "").target = self
         menu.addItem(.separator())
         let accessibility = menu.addItem(withTitle: "Enable Precise Dock Tracking…", action: #selector(enableAccessibility), keyEquivalent: "")
@@ -178,6 +227,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func refreshNow() {
         Task { await store.refresh(immediately: true) }
+    }
+
+    @objc private func openWindow() {
+        details.close()
+        sections.show()
     }
 
     @objc private func openGitHub() {

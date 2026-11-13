@@ -116,6 +116,7 @@ final class DetailController {
         }
         let opening = shown == nil
         shown = box
+        store.markSeen(box)
         render(model, anchor: anchor, opening: opening)
         observe(box)
         updateEngaged()
