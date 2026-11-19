@@ -139,7 +139,7 @@ private extension DetailModel {
     }
 }
 
-private struct RowView: View {
+struct RowView: View {
     let row: DetailModel.Row
     let avatars: AvatarCache
     let pointer: DetailPointer

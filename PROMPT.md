@@ -5,7 +5,7 @@ Dock Notch from scratch: a macOS app that fills the space beside the Dock with y
 activity. Give the agent this whole file. Add what you'd like done differently at the end,
 under **Your changes**, or tell the agent as it goes.
 
-It describes **Dock Notch 0.2.0**. Each release updates this file, so the difference
+It describes **Dock Notch 0.3.0**. Each release updates this file, so the difference
 between two versions of it is what changed (see "Later releases" at the end).
 
 ![The strip with two tiles](docs/strip.png)
@@ -354,9 +354,10 @@ pointer moves within the Dock's thickness plus 40pt of an edge that doesn't rese
 
 ### The right-click menu
 
-Refresh Now (⌘R), Open Window (⌘O, below), Open GitHub, Enable Precise Dock Tracking… (only while Accessibility
-isn't granted; it prompts and opens that pane of System Settings), Open at Login (a
-checkmark, using `SMAppService.mainApp`), and Quit Dock Notch (⌘Q).
+Refresh Now (⌘R), Open Window (⌘O, below), Good Morning (shown with ⌃⌥M, the morning
+window's hot key), Open GitHub, Open Plugins Folder (creating it first), Enable Precise Dock
+Tracking… (only while Accessibility isn't granted; it prompts and opens that pane of System
+Settings), Open at Login (a checkmark, using `SMAppService.mainApp`), and Quit Dock Notch (⌘Q).
 
 ## Popovers
 
@@ -448,11 +449,78 @@ Sections are optional, and case doesn't matter: `activity` or `contributions`; `
 `pulls`, `pull-requests` or `open-prs`; `comments`, `comment` or `conversation`; `reviews`,
 `review` or `review-requests`; `checks` or `ci`; `merged` or `merges`.
 
+## The morning window
+
+What to look at first thing, stacked in one larger card. ![](docs/morning.png)
+
+- The larger window's panel and look, 680pt wide, its top edge 8% of the visible height
+  below the top, up to 860pt or 84% of the visible height, rising 8pt and fading in over
+  0.25s. No tabs: a header with the date (12pt secondary, like "Thursday, November 19")
+  over "Good morning" (22pt semibold; "Good afternoon" from 12, "Good evening" from 18) and
+  the time on the right in tertiary, or "Updating…" while anything is loading. Under it the
+  filter chips (the tabs' style) with **Edit Filters…** at the right end, then a hairline,
+  then the sections, all on a 20pt left edge.
+- Each section: a 13pt semibold title with an optional count in tertiary beside it
+  (clicking the title opens its page), then rows exactly like the popovers', or a 12.5pt
+  tertiary note when it has none. 14pt between sections. It scrolls when it doesn't fit.
+- Sections come from providers, each sorted by its order: **Today** (10), **Waiting for your
+  review** (20), **Your pull requests** (30), then plugins (50 unless they say otherwise).
+- The pull request sections run their own GitHub fetch, the same query with
+  `searchQualifier` plus the picked filter's qualifiers, so filters change only this window.
+  Keep each filter's last result, so switching back is instant. Up to 30 rows each.
+- **Filters**: stored as `"Name: qualifiers"` lines (the name ends at the first ": "). Chips
+  show only when there are any, after a built-in **Everything**. The picked one is
+  remembered. **Edit Filters…** (or ⌘,) closes the window and shows an alert with a
+  monospaced text box of the lines; Save stores them and reopens the window.
+- **Today** uses EventKit: today's events from every calendar except `morningHiddenCalendars`,
+  without cancelled or declined ones, all-day ones first, then what's left of the day (ended
+  ones drop off; the count says "N left, M done"). Rows: the all-day ones with a `sun.max`
+  symbol and "All day"; the ongoing one green, "Now, until 10:00"; the next one, if within
+  the hour, amber, "In 12 min, 9:30"; others "9:30–10:00". Then "Join online" or the location,
+  and the calendar's name. A Teams, Zoom, Meet or Webex link found in the event's URL,
+  location or notes makes the symbol `video.fill` and the row open that link; otherwise it
+  opens Calendar. Refresh on `EKEventStoreChanged`. Until access is granted, a row offers to
+  allow it (requesting full access to events only when clicked), or, once denied, opens the
+  Calendars pane of Privacy settings.
+- Rows that act in the window, such as allowing the calendar or a plugin, use a
+  `docknotch-morning://<action>/<argument>` URL handled by the providers, and keep the window
+  open. Any other row opens its URL and closes the window.
+- **Opening by itself**: check every 30 seconds, after the screens wake, and a few seconds
+  after launch. Open when it's within `morningHours`, it hasn't opened today (any opening
+  counts), the screen isn't locked (`CGSSessionScreenIsLocked`) and there's been input in
+  the last minute. Fetch everything at launch so the first opening has data, and again on
+  each opening unless it's been under a minute.
+- **⌃⌥M** toggles it from any app with a Carbon `RegisterEventHotKey` (no permission needed).
+  Not ⌘M: that minimizes windows. `docknotch://morning` opens it and
+  `docknotch://morning/toggle` toggles it.
+- Keys: ← → or Tab switch filters, ↓ ↑ pick a row across all sections, ↩ opens it, ⌘R
+  refreshes, ⌘, edits filters, ⌘W and Esc close.
+
+### Plugins
+
+Folders in `~/Library/Application Support/Dock Notch/Plugins/`, each with a `plugin.json`
+(`name`, `command`, optional `order` and `timeout`) and a command that prints sections as
+JSON. PLUGINS.md is the format: follow it exactly, since plugins written for Dock Notch
+should work with your build too.
+
+- Discover them on each refresh, in folder name order. Run `/bin/sh -c <command>` in the
+  plugin's folder with Homebrew's directories on PATH and `DOCKNOTCH_PLUGIN` and
+  `DOCKNOTCH_PLUGIN_DIR` set, stopping it after `timeout` seconds (30). Run them in parallel.
+- A plugin runs only once allowed: until then it shows one row, "Allow the Mail plugin to
+  run", with its command as an amber lead. Clicking it records the command as allowed for
+  that folder (`allowedPlugins`); a different command asks again.
+- Map its rows onto the popover rows: `symbol` and `tint` (or a round `avatar`), `title`,
+  `lead` in `leadTint`, then " · " and `detail` in secondary. Tint names map to the palette.
+- Problems show as the section's note: a manifest that doesn't parse, a non-zero exit with
+  the last line of stderr, output that doesn't decode (and where), a timeout.
+
 ## Settings
 
 Read from `defaults` under your bundle identifier, applied on the next launch:
 `searchQualifier` (none), `refreshInterval` (60), `rotationInterval` (7), `maxTiles` (5),
-`ghPath` (auto).
+`ghPath` (auto), and for the morning window `morningAutoOpen` (true), `morningHours`
+("6-11"), `morningHotKey` (true), `morningCalendar` (true), `morningHiddenCalendars` (none)
+and `morningFilters` (none).
 
 ## Checking your work
 
@@ -460,17 +528,22 @@ Add a development mode that renders without a screen:
 `DockNotch --render <dir> [--sample] [--width <points>] [--details]` writes the strip as a
 PNG (2x, on a colorful background) once per rotating card, at an 84pt height and the given
 width of space beside the Dock; `--sample` uses made-up data that fills every card;
-`--details` also writes each popover at its full height, and the larger window once per
-section. Look at the images after each
+`--details` also writes each popover at its full height, the larger window once per
+section, and the morning window with sample meetings and a sample plugin section. Look at the images after each
 change, at widths like 625 and 960. Then run the app, try a bottom, left and right Dock,
 auto-hide, a full-screen app, and with and without Accessibility access.
 
 ## Packaging
 
 A script that runs `swift build -c release`, makes `build/DockNotch.app` with the binary
-and an Info.plist (`LSUIElement`, `NSHighResolutionCapable`, minimum system 14.0), and signs
+and an Info.plist (`LSUIElement`, `NSHighResolutionCapable`, minimum system 14.0,
+`NSCalendarsFullAccessUsageDescription` and `NSAppleEventsUsageDescription`), and signs
 it with an Apple Development identity when there is one (macOS ties the Accessibility grant
-to the signature, and an ad-hoc one changes every build), else ad-hoc. A Makefile with
+to the signature, and an ad-hoc one changes every build), else ad-hoc. Sign the app with
+entitlements for calendars and Apple Events
+(`com.apple.security.personal-information.calendars`,
+`com.apple.security.automation.apple-events`), which the hardened runtime of a signed
+release needs. A Makefile with
 `run` (build and open) and `install` (copy to /Applications and open).
 
 ---

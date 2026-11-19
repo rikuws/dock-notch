@@ -92,8 +92,8 @@ so the Accessibility grant survives rebuilds. Override it with `SIGN_IDENTITY="�
 - Click a card or tile to open it on GitHub (the comment, the failing PR, your PR list, and so on).
 - When something changes (a new comment, a new review request, a failing check, a merge), the
   tile showing it glows briefly, or the card jumps to it and glows.
-- Right-click for Refresh, Open Window, Open at Login, Check for Updates and Quit. The menu also shows
-  which version you're running.
+- Right-click for Refresh, Open Window, Good Morning, Open GitHub, Open Plugins Folder, Open
+  at Login, Check for Updates and Quit. The menu also shows which version you're running.
 
 ## The window
 
@@ -120,6 +120,27 @@ GitHub. ⌘R refreshes. Esc or a click anywhere else closes it.
 open docknotch://toggle/reviews
 ```
 
+## The morning window
+
+What to look at first thing, in one larger card: today's meetings, the pull requests
+waiting for your review, your own open ones, and whatever your plugins add.
+
+![The morning window](docs/morning.png)
+
+- It opens by itself the first time you're at the Mac each morning (between 6 and 11, with
+  the screen unlocked), and any time with **⌃⌥M** from any app, **Good Morning** in the
+  right-click menu, or `docknotch://morning` (`docknotch://morning/toggle` closes it again).
+- **Today** comes from Calendar's accounts (iCloud, Google, Exchange and others added under
+  System Settings → Internet Accounts). Nothing asks for calendar access until you click
+  the row that offers it. Meetings with a Teams, Zoom, Meet or Webex link join with a
+  click; the next one says how soon it starts.
+- **Filters** hide repos from the window without touching the strip: **Edit Filters…**
+  (⌘,) takes one per line, a name and GitHub search qualifiers, such as
+  `Work: -repo:acme/deps -repo:acme/infra`. Each shows as a chip; ← → switch between them.
+- **Plugins** add sections from anything a script can read, such as Mail or a to-do app.
+  They live outside the app, so they keep working through updates. See [PLUGINS.md](PLUGINS.md).
+- ↑ ↓ pick a row, ↩ opens it, ⌘R refreshes, Esc or a click elsewhere closes.
+
 ## Updates
 
 - **Downloaded copies** check for a new release once a day with
@@ -141,6 +162,12 @@ Settings live in `defaults` under `com.rikuws.docknotch`. Restart the app after 
 | `rotationInterval` | `7` | Seconds each card stays up |
 | `maxTiles` | `5` | Most tiles to show beside the card; `0` shows the card alone |
 | `ghPath` | auto | Path to `gh` if it isn't in Homebrew, `/usr/local/bin` or your login shell's PATH |
+| `morningAutoOpen` | `true` | Whether the morning window opens by itself once each morning |
+| `morningHours` | `6-11` | The hours when it may, as `start-end` in 24-hour time |
+| `morningHotKey` | `true` | Whether ⌃⌥M opens and closes it from any app |
+| `morningCalendar` | `true` | Whether it has a Today section |
+| `morningHiddenCalendars` | none | Calendars to leave out of Today, by name, such as `Birthdays` |
+| `morningFilters` | none | Its filters, as `"Name: qualifiers"` strings. Easier with Edit Filters… in the window |
 
 ```bash
 defaults write com.rikuws.docknotch searchQualifier "org:acme"
@@ -171,6 +198,13 @@ defaults write com.rikuws.docknotch searchQualifier "org:acme"
   the new display instead.
 - `SectionWindow.swift` is the larger window and its keyboard handling; `AppDelegate.swift`
   routes `docknotch://` links to it.
+- `Morning/` is the morning window. Each source of sections is a `MorningProvider`:
+  `GitHubMorning` runs its own fetch with the picked filter, `CalendarMorning` reads
+  EventKit, and `Plugins/PluginMorning.swift` runs the plugins in
+  `~/Library/Application Support/Dock Notch/Plugins/`. `MorningHotKey.swift` registers ⌃⌥M
+  as a Carbon hot key, which needs no permission. The app's entitlements
+  (`Support/DockNotch.entitlements`) let the hardened runtime allow Calendar and Apple
+  Events.
 - `Views/StripLayout.swift` decides how many tiles fit and how wide each box is. The view runs it
   on its live size, so the strip reflows smoothly while the Dock resizes.
 - `Views/` holds the rest of the SwiftUI strip. Card rows swap with a staggered lift-and-blur,

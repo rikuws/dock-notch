@@ -1,0 +1,6 @@
+{
+  "name": "Mail",
+  "command": "./mail.sh",
+  "order": 40,
+  "timeout": 45
+}

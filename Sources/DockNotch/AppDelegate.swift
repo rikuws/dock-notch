@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var tracker = DockTracker { [weak self] geometry in self?.place(for: geometry) }
     private lazy var details = DetailController(store: store)
     private lazy var sections = SectionController(store: store)
+    private lazy var morning = MorningController(store: store)
     private let updater = Updater()
     private var hasPlaced = false
     private var dock: DockGeometry?
@@ -43,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         tracker.start()
         store.start()
         updater.start()
+        morning.start()
     }
 
     // MARK: - Links
@@ -64,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "toggle": sections.toggle(section)
         case "close", "hide": sections.close()
         case "refresh": Task { await store.refresh(immediately: true) }
+        case "morning": words.dropFirst().first == "toggle" ? morning.toggle() : morning.show()
         default:
             if let kind = CardKind(linkName: action) { sections.show(kind) }
         }
@@ -194,7 +197,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         menu.addItem(withTitle: "Refresh Now", action: #selector(refreshNow), keyEquivalent: "r").target = self
         menu.addItem(withTitle: "Open Window", action: #selector(openWindow), keyEquivalent: "o").target = self
+        let morningItem = menu.addItem(withTitle: "Good Morning", action: #selector(openMorning), keyEquivalent: MorningHotKey.keyEquivalent)
+        morningItem.keyEquivalentModifierMask = MorningHotKey.modifiers
+        morningItem.target = self
         menu.addItem(withTitle: "Open GitHub", action: #selector(openGitHub), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Open Plugins Folder", action: #selector(openPlugins), keyEquivalent: "").target = self
         menu.addItem(.separator())
         let accessibility = menu.addItem(withTitle: "Enable Precise Dock Tracking…", action: #selector(enableAccessibility), keyEquivalent: "")
         accessibility.target = self
@@ -232,6 +239,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func openWindow() {
         details.close()
         sections.show()
+    }
+
+    @objc private func openMorning() {
+        details.close()
+        morning.show()
+    }
+
+    @objc private func openPlugins() {
+        try? FileManager.default.createDirectory(at: Plugin.folder, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(Plugin.folder)
     }
 
     @objc private func openGitHub() {

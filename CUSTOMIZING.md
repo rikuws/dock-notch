@@ -8,6 +8,9 @@ There are three ways to have a Dock Notch, and updates reach each of them:
 | **Change it with your coding agent** | The release's source with your changes on top | Your changes move onto each new release, and your agent carries over any that clash. |
 | **Build it from PROMPT.md** | An app your agent wrote from a description | Your agent ports what each release changed in the description. |
 
+To add your own sections to the morning window, you may not need any of this: a
+[plugin](PLUGINS.md) is a script beside the downloaded app, and updates never touch it.
+
 ## Change it with your coding agent
 
 You need Xcode 16 or later, `gh` (see the README) and a coding agent. Claude Code and Codex

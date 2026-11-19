@@ -84,9 +84,11 @@ sign_all() {
     local identity="$1"
     shift
     local sparkle="$APP/Contents/Frameworks/Sparkle.framework"
-    for code in "$sparkle/Versions/B/Autoupdate" "$sparkle/Versions/B/Updater.app" "$sparkle" "$APP"; do
+    for code in "$sparkle/Versions/B/Autoupdate" "$sparkle/Versions/B/Updater.app" "$sparkle"; do
         codesign --force --sign "$identity" "$@" "$code" || return 1
     done
+    # The app's entitlements let the hardened runtime allow Calendar and Apple Events.
+    codesign --force --sign "$identity" "$@" --entitlements Support/DockNotch.entitlements "$APP"
 }
 
 if [[ "$CHANNEL" == release ]]; then

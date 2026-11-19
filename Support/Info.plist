@@ -33,6 +33,10 @@
             </array>
         </dict>
     </array>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Dock Notch shows today's meetings in the morning window. Nothing leaves your Mac.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>A Dock Notch plugin you allowed wants to read from this app to show it in the morning window.</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSHighResolutionCapable</key>

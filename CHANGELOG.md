@@ -4,6 +4,24 @@ Each section is a release's notes: they show in the app's update window and on t
 release. Describe what changed in terms of what you see and do, so the notes also work as
 instructions for anyone porting the change to a build of their own (see PROMPT.md).
 
+## 0.3.0
+
+- **The morning window**: what to look at first thing, in one larger card. Today's
+  meetings, the pull requests waiting for your review and your own open ones. It opens by
+  itself the first time you're at the Mac each morning, and any time with **⌃⌥M** from any
+  app, **Good Morning** in the right-click menu, or `docknotch://morning`.
+- **Today** reads Calendar's accounts, Exchange and Google included, once you allow it from
+  the row that offers it. A meeting with a Teams, Zoom, Meet or Webex link joins with a
+  click, and the next one says how soon it starts.
+- **Filters** for the morning window: named sets of GitHub search qualifiers, like
+  `Work: -repo:acme/deps`, that hide repos there without touching the strip. Edit them in
+  the window with **Edit Filters…** and switch with ← →.
+- **Plugins** add your own sections to the morning window from anything a script can read,
+  and keep working through updates. A plugin is a folder with a `plugin.json` and a
+  command that prints JSON; **Open Plugins Folder** in the right-click menu shows where
+  they go. Each asks once before it runs. PLUGINS.md has the format and an example that
+  shows unread mail from Mail.app, with Slack's notification emails on their own.
+
 ## 0.2.0
 
 - A larger window for looking at a section properly, whenever you want: every pull request

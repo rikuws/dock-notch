@@ -51,6 +51,7 @@ enum CardRenderer {
         }
 
         guard details else { return }
+        MorningController.render(into: directory, avatars: store.avatars)
         for kind in CardKind.allCases {
             store.select(kind)
             guard let model = DetailModel.make(for: .card, store: store) else { continue }

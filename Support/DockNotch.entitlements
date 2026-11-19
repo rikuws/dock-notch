@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- The morning window's Today section reads Calendar's accounts with EventKit. -->
+    <key>com.apple.security.personal-information.calendars</key>
+    <true/>
+    <!-- Plugins may script other apps, such as Mail, with osascript. macOS asks first. -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+</dict>
+</plist>
